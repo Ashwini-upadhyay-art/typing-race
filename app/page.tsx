@@ -1,24 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/Button";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { userActions } from "@/lib/store/slices/userSlice";
 
 export default function LandingPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
+  const dispatch = useAppDispatch();
+  const savedUsername = useAppSelector((s) => s.user.username);
+  const [username, setUsername] = useState(savedUsername);
   const [code, setCode] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const saved = window.localStorage.getItem("nt:username");
-    if (saved) setUsername(saved);
-  }, []);
+  // Sync local input with the hydrated Redux value once it lands.
+  if (savedUsername && !username) {
+    setUsername(savedUsername);
+  }
 
-  function persistUsername(name: string) {
-    window.localStorage.setItem("nt:username", name);
+  function saveName(name: string) {
+    dispatch(userActions.setUsername(name));
   }
 
   async function handleCreate() {
@@ -26,7 +30,7 @@ export default function LandingPage() {
       setError("Pick a username first");
       return;
     }
-    persistUsername(username.trim());
+    saveName(username.trim());
     setCreating(true);
     setError(null);
     try {
@@ -50,7 +54,7 @@ export default function LandingPage() {
       setError("Room code must be 6 characters");
       return;
     }
-    persistUsername(username.trim());
+    saveName(username.trim());
     router.push(`/lobby/${trimmed}`);
   }
 

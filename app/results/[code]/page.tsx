@@ -1,40 +1,51 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/Button";
-import type { RaceResult } from "@/types";
+import { useAppSelector } from "@/lib/store/hooks";
 
 export default function ResultsPage() {
   const params = useParams<{ code: string }>();
   const code = (params.code ?? "").toUpperCase();
   const router = useRouter();
 
-  const [result, setResult] = useState<RaceResult | null>(null);
+  // Prefer the live room (just-finished race), fall back to the user's
+  // persisted history (e.g. after a hard refresh).
+  const room = useAppSelector((s) => s.room);
+  const history = useAppSelector((s) => s.user.history);
 
-  useEffect(() => {
-    const cached = window.sessionStorage.getItem(`nt:result:${code}`);
-    if (cached) {
-      try {
-        setResult(JSON.parse(cached));
-        return;
-      } catch {
-        // fall through
-      }
+  const result = useMemo(() => {
+    if (room.code === code && room.status === "finished" && room.order.length > 0) {
+      return {
+        roomCode: room.code,
+        passage: room.passage,
+        difficulty: room.difficulty,
+        players: room.order
+          .map((id) => room.players[id])
+          .sort((a, b) => {
+            if (a.finished !== b.finished) return a.finished ? -1 : 1;
+            return (a.position ?? 99) - (b.position ?? 99);
+          }),
+      };
     }
-    // Fallback: fetch persisted results.
-    fetch(`/api/results/${code}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => data && setResult(data))
-      .catch(() => undefined);
-  }, [code]);
+    const past = history.find((h) => h.roomCode === code);
+    if (past) return past;
+    return null;
+  }, [room, history, code]);
 
   if (!result) {
-    return <div className="text-white/60 font-mono text-sm py-20 text-center">Loading results...</div>;
+    return (
+      <div className="text-white/60 font-mono text-sm py-20 text-center">
+        No results found for this room. <br />
+        <Button variant="ghost" onClick={() => router.push("/")} className="mt-6">
+          Back to landing
+        </Button>
+      </div>
+    );
   }
 
-  const podium = result.players;
   const medals = ["🥇", "🥈", "🥉"];
 
   return (
@@ -46,6 +57,9 @@ export default function ResultsPage() {
       >
         <div className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
           Race {code}
+          {"difficulty" in result && (
+            <span className="ml-2 text-white/30">· {result.difficulty}</span>
+          )}
         </div>
         <h1 className="text-4xl sm:text-5xl font-mono font-bold text-neon-cyan animate-glow">
           Final Standings
@@ -64,7 +78,7 @@ export default function ResultsPage() {
             </tr>
           </thead>
           <tbody>
-            {podium.map((p, i) => (
+            {result.players.map((p, i) => (
               <motion.tr
                 key={p.id}
                 initial={{ opacity: 0, x: -10 }}
@@ -72,9 +86,7 @@ export default function ResultsPage() {
                 transition={{ delay: i * 0.08 }}
                 className="border-t border-white/5"
               >
-                <td className="px-4 py-3 text-white/60">
-                  {medals[i] ?? `${i + 1}.`}
-                </td>
+                <td className="px-4 py-3 text-white/60">{medals[i] ?? `${i + 1}.`}</td>
                 <td className="px-4 py-3 text-white">{p.username}</td>
                 <td className="px-4 py-3 text-right text-neon-cyan">{p.wpm}</td>
                 <td className="px-4 py-3 text-right text-neon-lime">{p.accuracy}%</td>

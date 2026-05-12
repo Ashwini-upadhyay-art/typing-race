@@ -5,9 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { PlayerCard } from "@/components/PlayerCard";
-import { useSocket } from "@/hooks/useSocket";
+import { useAppSelector } from "@/lib/store/hooks";
+import { useRoomChannel } from "@/hooks/useRoomChannel";
+import { pickPassage } from "@/lib/passages";
 import { clsx } from "@/lib/utils";
-import type { Difficulty, RoomState } from "@/types";
+import type { Difficulty } from "@/types";
+
+const COUNTDOWN_MS = 3000;
 
 const DIFFICULTIES: { id: Difficulty; label: string; desc: string }[] = [
   { id: "easy", label: "Easy", desc: "~90 chars · short, gentle warm-up" },
@@ -19,47 +23,38 @@ export default function LobbyPage() {
   const params = useParams<{ code: string }>();
   const code = (params.code ?? "").toUpperCase();
   const router = useRouter();
-  const socket = useSocket();
 
-  const [room, setRoom] = useState<RoomState | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const username = useAppSelector((s) => s.user.username);
+  const room = useAppSelector((s) => s.room);
+  const { emitDifficulty, emitStart } = useRoomChannel(code);
+
   const [copied, setCopied] = useState(false);
 
+  // Send everyone to the race page when countdown starts.
   useEffect(() => {
-    if (!socket || !code) return;
-    const username = window.localStorage.getItem("nt:username") || "Racer";
-
-    const join = () => {
-      socket.emit("room:join", { code, username }, (res) => {
-        if (!res.ok) {
-          setError(res.error);
-          return;
-        }
-        setRoom(res.state);
-      });
-    };
-
-    if (socket.connected) join();
-    else socket.once("connect", join);
-
-    socket.on("room:state", setRoom);
-    socket.on("race:countdown", (state) => {
-      setRoom(state);
+    if (room.code === code && room.status === "countdown") {
       router.push(`/race/${code}`);
-    });
+    }
+  }, [room.status, room.code, code, router]);
 
-    return () => {
-      socket.off("room:state", setRoom);
-      socket.off("race:countdown");
-    };
-  }, [socket, code, router]);
+  // If a player lands without a username, send them back to set one.
+  useEffect(() => {
+    if (!username) router.replace("/");
+  }, [username, router]);
+
+  const selfId = room.selfId;
+  const hostId = room.order[0] ?? null;
+  const isHost = !!selfId && selfId === hostId;
+  const players = room.order.map((id) => room.players[id]).filter(Boolean);
 
   function handleStart() {
-    socket?.emit("race:start");
-  }
-
-  function handleDifficulty(d: Difficulty) {
-    socket?.emit("room:set_difficulty", { difficulty: d });
+    if (!isHost) return;
+    const passage = pickPassage(room.difficulty);
+    emitStart({
+      passage,
+      difficulty: room.difficulty,
+      startsAt: Date.now() + COUNTDOWN_MS,
+    });
   }
 
   function handleCopy() {
@@ -70,13 +65,8 @@ export default function LobbyPage() {
   }
 
   function handleLeave() {
-    socket?.emit("room:leave");
     router.push("/");
   }
-
-  const selfId = socket?.id;
-  const isHost = !!room && !!selfId && room.hostId === selfId;
-  const difficulty: Difficulty = room?.difficulty ?? "medium";
 
   return (
     <div className="space-y-8">
@@ -117,11 +107,11 @@ export default function LobbyPage() {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {DIFFICULTIES.map((d) => {
-              const selected = difficulty === d.id;
+              const selected = room.difficulty === d.id;
               return (
                 <button
                   key={d.id}
-                  onClick={() => isHost && handleDifficulty(d.id)}
+                  onClick={() => isHost && emitDifficulty(d.id)}
                   disabled={!isHost}
                   className={clsx(
                     "rounded-md border px-2 py-3 text-left transition",
@@ -149,30 +139,30 @@ export default function LobbyPage() {
 
         <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
-            Players ({room?.players.length ?? 0})
+            Players ({players.length})
           </div>
           <div className="space-y-2 min-h-[60px]">
-            {!room && <div className="text-white/40 font-mono text-sm">Connecting...</div>}
-            {room?.players.map((p) => (
+            {players.length === 0 && (
+              <div className="text-white/40 font-mono text-sm">Connecting...</div>
+            )}
+            {players.map((p) => (
               <PlayerCard
                 key={p.id}
                 player={p}
-                isHost={p.id === room.hostId}
+                isHost={p.id === hostId}
                 isSelf={p.id === selfId}
               />
             ))}
           </div>
         </div>
 
-        {error && (
-          <p className="text-neon-pink text-xs font-mono uppercase tracking-widest text-center">
-            {error}
-          </p>
-        )}
-
         <div className="pt-2">
           {isHost ? (
-            <Button onClick={handleStart} className="w-full" disabled={!room || room.players.length < 1}>
+            <Button
+              onClick={handleStart}
+              className="w-full"
+              disabled={players.length < 1}
+            >
               Start race
             </Button>
           ) : (

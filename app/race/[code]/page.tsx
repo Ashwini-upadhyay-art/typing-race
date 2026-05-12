@@ -1,92 +1,94 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Countdown } from "@/components/Countdown";
 import { RaceTrack } from "@/components/RaceTrack";
 import { TypingArea } from "@/components/TypingArea";
-import { useSocket } from "@/hooks/useSocket";
+import { useRoomChannel } from "@/hooks/useRoomChannel";
 import { useTypingEngine } from "@/hooks/useTypingEngine";
-import type { Player, RaceResult, RoomState } from "@/types";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { roomActions } from "@/lib/store/slices/roomSlice";
+import { userActions } from "@/lib/store/slices/userSlice";
 
 export default function RacePage() {
   const params = useParams<{ code: string }>();
   const code = (params.code ?? "").toUpperCase();
   const router = useRouter();
-  const socket = useSocket();
+  const dispatch = useAppDispatch();
 
-  const [room, setRoom] = useState<RoomState | null>(null);
-  const [players, setPlayers] = useState<Player[]>([]);
+  const username = useAppSelector((s) => s.user.username);
+  const room = useAppSelector((s) => s.room);
+  const { emitProgress, emitFinish } = useRoomChannel(code);
 
+  // Redirect home if username missing (e.g. direct nav).
   useEffect(() => {
-    if (!socket) return;
+    if (!username) router.replace("/");
+  }, [username, router]);
 
-    // We may arrive here either from the lobby (already joined) or via direct nav.
-    const ensureJoined = () => {
-      if (!socket.id) return;
-      const username = window.localStorage.getItem("nt:username") || "Racer";
-      // Soft-join — server returns the current state regardless.
-      socket.emit("room:join", { code, username }, (res) => {
-        if (res.ok) {
-          setRoom(res.state);
-          setPlayers(res.state.players);
-        }
-      });
+  // Flip from countdown → racing locally once startsAt arrives.
+  useEffect(() => {
+    if (room.status !== "countdown" || !room.startsAt) return;
+    const delay = room.startsAt - Date.now();
+    const t = window.setTimeout(() => dispatch(roomActions.raceStarted()), Math.max(0, delay));
+    return () => window.clearTimeout(t);
+  }, [room.status, room.startsAt, dispatch]);
+
+  // When the whole race finishes, persist a result to the user's history
+  // and push to the results screen.
+  useEffect(() => {
+    if (room.status !== "finished" || !room.code) return;
+    const result = {
+      roomCode: room.code,
+      passage: room.passage,
+      difficulty: room.difficulty,
+      players: room.order
+        .map((id) => room.players[id])
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (a.finished !== b.finished) return a.finished ? -1 : 1;
+          return (a.position ?? 99) - (b.position ?? 99);
+        }),
+      completedAt: room.finishedAt ?? Date.now(),
     };
+    dispatch(userActions.addRaceResult(result));
+    router.push(`/results/${code}`);
+  }, [
+    room.status,
+    room.code,
+    room.passage,
+    room.difficulty,
+    room.order,
+    room.players,
+    room.finishedAt,
+    dispatch,
+    router,
+    code,
+  ]);
 
-    if (socket.connected) ensureJoined();
-    else socket.once("connect", ensureJoined);
-
-    const onState = (s: RoomState) => {
-      setRoom(s);
-      setPlayers(s.players);
-    };
-    const onTick = (ps: Player[]) => setPlayers(ps);
-    const onStarted = (s: RoomState) => {
-      setRoom(s);
-      setPlayers(s.players);
-    };
-    const onFinished = (result: RaceResult) => {
-      window.sessionStorage.setItem(`nt:result:${code}`, JSON.stringify(result));
-      router.push(`/results/${code}`);
-    };
-
-    socket.on("room:state", onState);
-    socket.on("race:tick", onTick);
-    socket.on("race:started", onStarted);
-    socket.on("race:finished", onFinished);
-
-    return () => {
-      socket.off("room:state", onState);
-      socket.off("race:tick", onTick);
-      socket.off("race:started", onStarted);
-      socket.off("race:finished", onFinished);
-    };
-  }, [socket, code, router]);
-
-  const racing = room?.status === "racing";
+  const racing = room.status === "racing";
 
   const onProgress = useCallback(
     (data: { progress: number; wpm: number; accuracy: number }) => {
-      socket?.emit("race:progress", data);
+      emitProgress(data);
     },
-    [socket]
+    [emitProgress]
   );
-
   const onFinish = useCallback(
     (data: { wpm: number; accuracy: number }) => {
-      socket?.emit("race:finish", data);
+      emitFinish(data);
     },
-    [socket]
+    [emitFinish]
   );
 
-  const passage = room?.passage ?? "";
+  const passage = room.passage;
   const engine = useTypingEngine({ passage, enabled: racing, onProgress, onFinish });
 
-  const self = players.find((p) => p.id === socket?.id);
+  const players = room.order.map((id) => room.players[id]).filter(Boolean);
+  const self = room.selfId ? room.players[room.selfId] : undefined;
 
-  if (!room) {
+  if (!room.code || room.code !== code) {
     return (
       <div className="text-white/60 font-mono text-sm py-20 text-center">Connecting...</div>
     );
@@ -104,7 +106,7 @@ export default function RacePage() {
         </div>
       </header>
 
-      <RaceTrack players={players} selfId={socket?.id} />
+      <RaceTrack players={players} selfId={room.selfId ?? undefined} />
 
       {room.status === "countdown" && room.startsAt && (
         <Countdown startsAt={room.startsAt} />
