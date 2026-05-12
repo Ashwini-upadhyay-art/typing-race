@@ -1,0 +1,31 @@
+# Fly.io config for the NeonType Socket.io server.
+# Rename `app` to something globally unique before `fly launch`.
+
+app = "neontype-socket"
+primary_region = "iad"   # change to your closest region (sjc, ord, fra, sin, ...)
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  SOCKET_PORT = "8080"
+  # DATABASE_URL and CLIENT_ORIGIN are set via `fly secrets set ...`
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Always-on: never park the machine, even with zero connections.
+  auto_stop_machines = false
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

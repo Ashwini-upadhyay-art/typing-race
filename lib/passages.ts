@@ -1,4 +1,4 @@
-import type { Difficulty } from "@/types";
+import type { Difficulty } from "../types";
 
 export const PASSAGES: Record<Difficulty, string[]> = {
   easy: [

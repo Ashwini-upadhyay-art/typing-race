@@ -11,7 +11,11 @@ import type {
 import type { Player } from "../types";
 
 const PORT = Number(process.env.SOCKET_PORT ?? 4000);
-const ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:3000";
+// CLIENT_ORIGIN can be a comma-separated list (e.g. for Vercel preview deploys).
+const ORIGINS = (process.env.CLIENT_ORIGIN ?? "http://localhost:3000")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const httpServer = createServer((req, res) => {
   if (req.url === "/health") {
@@ -26,7 +30,7 @@ const httpServer = createServer((req, res) => {
 const io = new Server<ClientToServerEvents, ServerToClientEvents, never, SocketData>(
   httpServer,
   {
-    cors: { origin: ORIGIN, methods: ["GET", "POST"] },
+    cors: { origin: ORIGINS, methods: ["GET", "POST"] },
   }
 );
 

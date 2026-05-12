@@ -1,4 +1,4 @@
-import type { Difficulty, Player, RoomState, RaceResult } from "@/types";
+import type { Difficulty, Player, RoomState, RaceResult } from "../types";
 
 // Client → Server
 export interface ClientToServerEvents {
