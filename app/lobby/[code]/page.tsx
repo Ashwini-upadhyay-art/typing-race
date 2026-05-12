@@ -6,7 +6,14 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { PlayerCard } from "@/components/PlayerCard";
 import { useSocket } from "@/hooks/useSocket";
-import type { RoomState } from "@/types";
+import { clsx } from "@/lib/utils";
+import type { Difficulty, RoomState } from "@/types";
+
+const DIFFICULTIES: { id: Difficulty; label: string; desc: string }[] = [
+  { id: "easy", label: "Easy", desc: "~90 chars · short, gentle warm-up" },
+  { id: "medium", label: "Medium", desc: "~150 chars · default sprint" },
+  { id: "hard", label: "Hard", desc: "~300 chars · punctuation + numbers" },
+];
 
 export default function LobbyPage() {
   const params = useParams<{ code: string }>();
@@ -51,6 +58,10 @@ export default function LobbyPage() {
     socket?.emit("race:start");
   }
 
+  function handleDifficulty(d: Difficulty) {
+    socket?.emit("room:set_difficulty", { difficulty: d });
+  }
+
   function handleCopy() {
     navigator.clipboard.writeText(code).then(() => {
       setCopied(true);
@@ -64,7 +75,8 @@ export default function LobbyPage() {
   }
 
   const selfId = socket?.id;
-  const isHost = room && selfId && room.hostId === selfId;
+  const isHost = !!room && !!selfId && room.hostId === selfId;
+  const difficulty: Difficulty = room?.difficulty ?? "medium";
 
   return (
     <div className="space-y-8">
@@ -96,6 +108,42 @@ export default function LobbyPage() {
           </button>
           <div className="text-xs text-white/40 font-mono">
             {copied ? "Copied!" : "Tap to copy · share with friends"}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
+            Difficulty {isHost ? "" : "(host picks)"}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {DIFFICULTIES.map((d) => {
+              const selected = difficulty === d.id;
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => isHost && handleDifficulty(d.id)}
+                  disabled={!isHost}
+                  className={clsx(
+                    "rounded-md border px-2 py-3 text-left transition",
+                    selected
+                      ? "border-neon-cyan/70 bg-neon-cyan/10 shadow-neon"
+                      : "border-white/10 bg-black/30 hover:border-white/30",
+                    !isHost && "cursor-not-allowed",
+                    !isHost && !selected && "opacity-40"
+                  )}
+                >
+                  <div
+                    className={clsx(
+                      "font-mono uppercase tracking-widest text-xs",
+                      selected ? "text-neon-cyan" : "text-white/80"
+                    )}
+                  >
+                    {d.label}
+                  </div>
+                  <div className="text-[10px] text-white/40 mt-1 leading-tight">{d.desc}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
 

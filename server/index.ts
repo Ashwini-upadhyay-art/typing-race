@@ -75,6 +75,15 @@ io.on("connection", (socket) => {
     leave(socket.id, socket.data.roomCode);
   });
 
+  socket.on("room:set_difficulty", ({ difficulty }) => {
+    const code = socket.data.roomCode;
+    if (!code) return;
+    const room = roomManager.getRoom(code);
+    if (!room || room.hostId !== socket.id) return;
+    const updated = roomManager.setDifficulty(code, difficulty);
+    if (updated) io.to(code).emit("room:state", updated);
+  });
+
   socket.on("race:start", () => {
     const code = socket.data.roomCode;
     if (!code) return;
@@ -84,7 +93,7 @@ io.on("connection", (socket) => {
     if (room.status !== "waiting") return;
     if (room.players.length < 1) return;
 
-    const counting = roomManager.setStatus(code, "countdown");
+    const counting = roomManager.startCountdown(code);
     if (!counting) return;
     io.to(code).emit("race:countdown", counting);
 

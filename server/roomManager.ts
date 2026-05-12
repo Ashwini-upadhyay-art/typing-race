@@ -1,30 +1,11 @@
 import { pickPassage } from "../lib/passages";
-import type { Player, RoomState, RoomStatus } from "../types";
+import type { Difficulty, Player, RoomState, RoomStatus } from "../types";
 
 const COUNTDOWN_MS = 3000;
 
 export class RoomManager {
   private rooms = new Map<string, RoomState>();
 
-  createRoom(hostId: string): RoomState {
-    const code = this.generateCode();
-    const room: RoomState = {
-      code,
-      hostId,
-      status: "waiting",
-      passage: pickPassage(),
-      players: [],
-    };
-    this.rooms.set(code, room);
-    return room;
-  }
-
-  getRoom(code: string): RoomState | undefined {
-    return this.rooms.get(code.toUpperCase());
-  }
-
-  // Ensure a room exists for a given code (used when a client joins via shared link
-  // before the host's socket has called createRoom). The first joiner becomes host.
   ensureRoom(code: string, hostIdFallback: string): RoomState {
     const upper = code.toUpperCase();
     const existing = this.rooms.get(upper);
@@ -33,11 +14,16 @@ export class RoomManager {
       code: upper,
       hostId: hostIdFallback,
       status: "waiting",
-      passage: pickPassage(),
+      difficulty: "medium",
+      passage: "",
       players: [],
     };
     this.rooms.set(upper, room);
     return room;
+  }
+
+  getRoom(code: string): RoomState | undefined {
+    return this.rooms.get(code.toUpperCase());
   }
 
   addPlayer(code: string, player: Player): RoomState | undefined {
@@ -66,13 +52,28 @@ export class RoomManager {
     return room;
   }
 
+  setDifficulty(code: string, difficulty: Difficulty): RoomState | undefined {
+    const room = this.getRoom(code);
+    if (!room) return undefined;
+    if (room.status !== "waiting") return undefined;
+    room.difficulty = difficulty;
+    return room;
+  }
+
+  startCountdown(code: string): RoomState | undefined {
+    const room = this.getRoom(code);
+    if (!room) return undefined;
+    if (room.status !== "waiting") return undefined;
+    room.passage = pickPassage(room.difficulty);
+    room.status = "countdown";
+    room.startsAt = Date.now() + COUNTDOWN_MS;
+    return room;
+  }
+
   setStatus(code: string, status: RoomStatus): RoomState | undefined {
     const room = this.getRoom(code);
     if (!room) return undefined;
     room.status = status;
-    if (status === "countdown") {
-      room.startsAt = Date.now() + COUNTDOWN_MS;
-    }
     if (status === "finished") {
       room.finishedAt = Date.now();
     }
@@ -117,18 +118,6 @@ export class RoomManager {
 
   deleteRoom(code: string) {
     this.rooms.delete(code.toUpperCase());
-  }
-
-  private generateCode(): string {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let code = "";
-    do {
-      code = "";
-      for (let i = 0; i < 6; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)];
-      }
-    } while (this.rooms.has(code));
-    return code;
   }
 }
 

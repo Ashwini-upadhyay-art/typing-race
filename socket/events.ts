@@ -1,4 +1,4 @@
-import type { Player, RoomState, RaceResult } from "@/types";
+import type { Difficulty, Player, RoomState, RaceResult } from "@/types";
 
 // Client → Server
 export interface ClientToServerEvents {
@@ -7,7 +7,8 @@ export interface ClientToServerEvents {
     ack: (res: { ok: true; state: RoomState } | { ok: false; error: string }) => void
   ) => void;
   "room:leave": () => void;
-  "race:start": () => void; // host only
+  "room:set_difficulty": (payload: { difficulty: Difficulty }) => void;
+  "race:start": () => void;
   "race:progress": (payload: { progress: number; wpm: number; accuracy: number }) => void;
   "race:finish": (payload: { wpm: number; accuracy: number }) => void;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Countdown } from "@/components/Countdown";
@@ -84,11 +84,6 @@ export default function RacePage() {
   const passage = room?.passage ?? "";
   const engine = useTypingEngine({ passage, enabled: racing, onProgress, onFinish });
 
-  const sortedPlayers = useMemo(
-    () => [...players].sort((a, b) => b.progress - a.progress),
-    [players]
-  );
-
   const self = players.find((p) => p.id === socket?.id);
 
   if (!room) {
@@ -109,7 +104,7 @@ export default function RacePage() {
         </div>
       </header>
 
-      <RaceTrack players={sortedPlayers} selfId={socket?.id} />
+      <RaceTrack players={players} selfId={socket?.id} />
 
       {room.status === "countdown" && room.startsAt && (
         <Countdown startsAt={room.startsAt} />

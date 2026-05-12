@@ -1,5 +1,7 @@
 export type RoomStatus = "waiting" | "countdown" | "racing" | "finished";
 
+export type Difficulty = "easy" | "medium" | "hard";
+
 export interface Player {
   id: string;
   username: string;
@@ -14,9 +16,10 @@ export interface RoomState {
   code: string;
   hostId: string;
   status: RoomStatus;
+  difficulty: Difficulty;
   passage: string;
   players: Player[];
-  startsAt?: number; // epoch ms when countdown ends
+  startsAt?: number;
   finishedAt?: number;
 }
 
