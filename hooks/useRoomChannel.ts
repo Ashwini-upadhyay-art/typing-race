@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Channel, Members } from "pusher-js";
-import { getPusherClient } from "@/lib/pusher";
+import { acquireChannel, releaseChannel, getPusherClient } from "@/lib/pusher";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { roomActions, type PresenceMember } from "@/lib/store/slices/roomSlice";
 import type {
@@ -34,7 +34,7 @@ export function useRoomChannel(code: string | null) {
     const channelName = `presence-room-${code}`;
     const pusher = getPusherClient(username);
 
-    const channel = pusher.subscribe(channelName);
+    const channel = acquireChannel(channelName, username);
     channelRef.current = channel;
 
     const onSubscribed = (members: Members) => {
@@ -81,7 +81,7 @@ export function useRoomChannel(code: string | null) {
       channel.unbind("client-start", onStart);
       channel.unbind("client-progress", onProgress);
       channel.unbind("client-finish", onFinish);
-      pusher.unsubscribe(channelName);
+      releaseChannel(channelName);
       channelRef.current = null;
     };
   }, [code, username, dispatch]);
