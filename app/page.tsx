@@ -58,6 +58,15 @@ export default function LandingPage() {
     router.push(`/lobby/${trimmed}`);
   }
 
+  function handleSolo() {
+    if (!username.trim()) {
+      setError("Pick a username first");
+      return;
+    }
+    saveName(username.trim());
+    router.push("/solo");
+  }
+
   return (
     <div className="space-y-12">
       <motion.header
@@ -116,6 +125,10 @@ export default function LandingPage() {
               Join
             </Button>
           </div>
+
+          <Button variant="ghost" onClick={handleSolo} className="w-full">
+            Solo · race the bot
+          </Button>
         </div>
 
         {error && (
