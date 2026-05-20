@@ -16,10 +16,10 @@ export const PASSAGES: Record<Difficulty, string[]> = {
     "Focus on the next word, not the entire passage. Small steady wins compound into a finishing line that arrives sooner than you ever expected.",
   ],
   hard: [
-    "The neon-lit synthwave horizon flickered at 88 mph, casting long, electric shadows across the cracked asphalt; my fingers, restless and precise, raced toward the next checkpoint — 1,200 characters away — refusing to surrender a single keystroke to the howling, magnetic wind.",
-    "In 1969, a Bell Labs engineer typed \"hello, world\" — eleven characters that quietly rewired civilization. Half a century later, we still chase that same compact rush: pixels igniting under fingertips, semicolons clicking into place like seatbelts, and the cursor blinking, blinking, blinking.",
-    "Accuracy is a discipline; speed is its reward. Mistype \"the\" as \"teh\" once and you'll wonder why; mistype it twice and you'll learn why; mistype it three times and the leaderboard — cold, unmoved, eternal — will quietly file you under \"almost\" and roll on without looking back.",
-    "Vermilion taillights bled into the rain at 2:47 a.m., the dashboard reading 73°F, the radio whispering static-laced jazz; somewhere between the on-ramp and the exit, between the question and the answer, between the keystroke and the next, a small voice asked: how fast can you really go?",
+    "The neon-lit synthwave horizon flickered at 88 mph, casting long, electric shadows across the cracked asphalt; my fingers, restless and precise, raced toward the next checkpoint, 1,200 characters away, refusing to surrender a single keystroke to the howling, magnetic wind.",
+    "In 1969, a Bell Labs engineer typed \"hello, world\", eleven characters that quietly rewired civilization. Half a century later, we still chase that same compact rush: pixels igniting under fingertips, semicolons clicking into place like seatbelts, and the cursor blinking, blinking, blinking.",
+    "Accuracy is a discipline; speed is its reward. Mistype \"the\" as \"teh\" once and you'll wonder why; mistype it twice and you'll learn why; mistype it three times and the leaderboard, cold, unmoved, eternal, will quietly file you under \"almost\" and roll on without looking back.",
+    "Vermilion taillights bled into the rain at 2:47 a.m., the dashboard reading 73 F, the radio whispering static-laced jazz; somewhere between the on-ramp and the exit, between the question and the answer, between the keystroke and the next, a small voice asked: how fast can you really go?",
   ],
 };
 
