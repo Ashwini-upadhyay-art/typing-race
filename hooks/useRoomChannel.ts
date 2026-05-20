@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import type { Channel, Members } from "pusher-js";
-import { acquireChannel, releaseChannel, getPusherClient } from "@/lib/pusher";
+import { subscribeRoom, getPusherClient } from "@/lib/pusher";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { roomActions, type PresenceMember } from "@/lib/store/slices/roomSlice";
 import type {
@@ -34,8 +34,29 @@ export function useRoomChannel(code: string | null) {
     const channelName = `presence-room-${code}`;
     const pusher = getPusherClient(username);
 
-    const channel = acquireChannel(channelName, username);
+    const channel = subscribeRoom(channelName, username);
     channelRef.current = channel;
+
+    // If we're subscribing to a channel that's already in the subscribed
+    // state (e.g. race page mounting after lobby already joined), Pusher
+    // does NOT re-fire `pusher:subscription_succeeded`. So we re-emit the
+    // current member list ourselves so initRoom runs for this hook too.
+    type SubscribedPresence = {
+      subscribed?: boolean;
+      members?: Members;
+    };
+    const presence = channel as unknown as SubscribedPresence;
+    if (presence.subscribed && presence.members) {
+      const arr: PresenceMember[] = [];
+      presence.members.each((m: PusherMember) => arr.push(memberToPresence(m)));
+      dispatch(
+        roomActions.initRoom({
+          code,
+          selfId: presence.members.me?.id ?? getPusherClient(username).connection.socket_id ?? "",
+          members: arr,
+        })
+      );
+    }
 
     const onSubscribed = (members: Members) => {
       const arr: PresenceMember[] = [];
@@ -74,6 +95,10 @@ export function useRoomChannel(code: string | null) {
     channel.bind("client-finish", onFinish);
 
     return () => {
+      // Only unbind THIS hook's handlers — leave the subscription itself
+      // alive so the next page (e.g. race after lobby) inherits a fully
+      // joined channel and doesn't have to re-auth. The subscription is
+      // torn down explicitly via leaveRoom() when the user goes home.
       channel.unbind("pusher:subscription_succeeded", onSubscribed);
       channel.unbind("pusher:member_added", onMemberAdded);
       channel.unbind("pusher:member_removed", onMemberRemoved);
@@ -81,7 +106,6 @@ export function useRoomChannel(code: string | null) {
       channel.unbind("client-start", onStart);
       channel.unbind("client-progress", onProgress);
       channel.unbind("client-finish", onFinish);
-      releaseChannel(channelName);
       channelRef.current = null;
     };
   }, [code, username, dispatch]);

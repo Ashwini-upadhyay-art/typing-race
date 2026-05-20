@@ -26,35 +26,39 @@ export function getPusherClient(username: string): Pusher {
   return client;
 }
 
-// Refcount channel subscriptions so multiple hooks (lobby + race) can
-// share the same presence membership. Without this, when Next.js mounts
-// the race page before unmounting the lobby, the lobby's cleanup would
-// unsubscribe the channel out from under the race page — leaving it with
-// an orphan ref that never receives client events.
-const refCounts = new Map<string, number>();
+// Subscribe once per channel name and cache the handle. We never auto-
+// unsubscribe on hook cleanup: lobby→race navigation tears down the lobby
+// hook and mounts the race hook, and if the lobby's cleanup unsubscribes
+// the channel, the race page is left with no subscription at all (or
+// re-subscribes from scratch with a fresh auth round-trip, losing any
+// client-* events sent during that window). Keeping the subscription
+// alive for the whole tab session is simpler and avoids all the race
+// conditions around mount/unmount ordering.
+const subscriptions = new Map<string, Channel>();
 
-export function acquireChannel(channelName: string, username: string): Channel {
+export function subscribeRoom(channelName: string, username: string): Channel {
+  const cached = subscriptions.get(channelName);
+  if (cached) return cached;
   const pusher = getPusherClient(username);
-  refCounts.set(channelName, (refCounts.get(channelName) ?? 0) + 1);
-  return pusher.subscribe(channelName);
+  const channel = pusher.subscribe(channelName);
+  subscriptions.set(channelName, channel);
+  return channel;
 }
 
-export function releaseChannel(channelName: string): void {
+// Explicit teardown — called when the user actually leaves the room flow
+// (back to landing). Not used in the lobby/race hook cleanups.
+export function leaveRoom(channelName: string): void {
   if (!client) return;
-  const count = refCounts.get(channelName) ?? 0;
-  if (count <= 1) {
-    refCounts.delete(channelName);
-    client.unsubscribe(channelName);
-  } else {
-    refCounts.set(channelName, count - 1);
-  }
+  if (!subscriptions.has(channelName)) return;
+  subscriptions.delete(channelName);
+  client.unsubscribe(channelName);
 }
 
 export function disconnectPusher() {
   if (client) {
     client.disconnect();
     client = null;
-    refCounts.clear();
+    subscriptions.clear();
   }
 }
 
