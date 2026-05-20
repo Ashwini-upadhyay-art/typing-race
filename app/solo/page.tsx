@@ -71,6 +71,10 @@ export default function SoloPage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [passage, setPassage] = useState("");
   const [startsAt, setStartsAt] = useState<number | null>(null);
+  // Frozen bot target for the in-progress race. `target` (derived from history)
+  // jumps the moment we persist this race's result, so the modal would otherwise
+  // show a different bot wpm than the one we actually raced against.
+  const [activeTarget, setActiveTarget] = useState(0);
 
   // Snapshots we keep outside useTypingEngine so they survive after the
   // engine resets on `enabled: false` at end of race.
@@ -99,12 +103,12 @@ export default function SoloPage() {
     });
   }, [phase, engine.progress, engine.wpm, engine.accuracy, engine.finished]);
 
-  // Bot loop — deterministic ticker scaled by target WPM.
+  // Bot loop — deterministic ticker scaled by the frozen race target.
   useEffect(() => {
-    if (!racing || !startsAt || !passage) return;
+    if (!racing || !startsAt || !passage || !activeTarget) return;
     const id = window.setInterval(() => {
       const elapsedMin = Math.max(0, (Date.now() - startsAt) / 60000);
-      const targetChars = target * 5 * elapsedMin;
+      const targetChars = activeTarget * 5 * elapsedMin;
       const next = Math.min(1, targetChars / passage.length);
       setBotSnap((s) => {
         if (s.finished) return s;
@@ -116,7 +120,7 @@ export default function SoloPage() {
       });
     }, BOT_TICK_MS);
     return () => window.clearInterval(id);
-  }, [racing, startsAt, target, passage]);
+  }, [racing, startsAt, activeTarget, passage]);
 
   // Record self finish order.
   useEffect(() => {
@@ -163,10 +167,10 @@ export default function SoloPage() {
       },
       {
         id: BOT_ID,
-        username: `Bot (${target} wpm)`,
+        username: `Bot (${activeTarget} wpm)`,
         joinedAt: 1,
         progress: botSnap.progress,
-        wpm: target,
+        wpm: activeTarget,
         accuracy: 100,
         finished: botSnap.finished,
         position: botPos >= 0 ? botPos + 1 : undefined,
@@ -186,7 +190,7 @@ export default function SoloPage() {
     username,
     passage,
     difficulty,
-    target,
+    activeTarget,
     selfSnap,
     botSnap,
     dispatch,
@@ -199,6 +203,7 @@ export default function SoloPage() {
     setBotSnap({ progress: 0, finished: false });
     finishOrderRef.current = [];
     persistedRef.current = false;
+    setActiveTarget(target);
     setStartsAt(Date.now() + COUNTDOWN_MS);
     setPhase("countdown");
   }
@@ -227,12 +232,12 @@ export default function SoloPage() {
         username: "Bot",
         joinedAt: 1,
         progress: botSnap.progress,
-        wpm: target,
+        wpm: activeTarget,
         accuracy: 100,
         finished: botSnap.finished,
       },
     ],
-    [username, selfSnap, botSnap, target]
+    [username, selfSnap, botSnap, activeTarget]
   );
 
   // ---- pick screen ----------------------------------------------------
@@ -315,7 +320,7 @@ export default function SoloPage() {
     <div className="space-y-6">
       <header className="flex items-center justify-between">
         <div className="text-[10px] uppercase tracking-widest text-white/40 font-mono">
-          Solo · vs Bot ({target} wpm)
+          Solo · vs Bot ({activeTarget} wpm)
         </div>
         <div className="flex items-center gap-4 font-mono">
           <Stat label="wpm" value={selfSnap.wpm.toString()} color="text-neon-cyan" />
@@ -354,7 +359,7 @@ export default function SoloPage() {
           <ResultsModal
             selfSnap={selfSnap}
             botSnap={botSnap}
-            target={target}
+            target={activeTarget}
             username={username || "You"}
             finishOrder={finishOrderRef.current}
             onRematch={rematch}
