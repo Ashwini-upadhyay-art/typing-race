@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Button } from "@/components/Button";
 import { Countdown } from "@/components/Countdown";
+import { LiveLeaderboard } from "@/components/LiveLeaderboard";
 import { RaceTrack } from "@/components/RaceTrack";
 import { TypingArea } from "@/components/TypingArea";
 import { useRoomChannel } from "@/hooks/useRoomChannel";
@@ -35,10 +37,14 @@ export default function RacePage() {
     return () => window.clearTimeout(t);
   }, [room.status, room.startsAt, dispatch]);
 
-  // When the whole race finishes, persist a result to the user's history
-  // and push to the results screen.
+  // When the whole race finishes, persist a result to the user's history.
+  // We stay on this page so the live leaderboard transitions naturally
+  // into the final standings — no jarring redirect.
+  const persistedRef = useRef(false);
   useEffect(() => {
     if (room.status !== "finished" || !room.code) return;
+    if (persistedRef.current) return;
+    persistedRef.current = true;
     const result = {
       roomCode: room.code,
       passage: room.passage,
@@ -53,7 +59,6 @@ export default function RacePage() {
       completedAt: room.finishedAt ?? Date.now(),
     };
     dispatch(userActions.addRaceResult(result));
-    router.push(`/results/${code}`);
   }, [
     room.status,
     room.code,
@@ -63,9 +68,15 @@ export default function RacePage() {
     room.players,
     room.finishedAt,
     dispatch,
-    router,
-    code,
   ]);
+
+  // Reset the persist guard if the user starts a new race (status flips
+  // away from finished, e.g. via rematch).
+  useEffect(() => {
+    if (room.status === "racing" || room.status === "countdown") {
+      persistedRef.current = false;
+    }
+  }, [room.status]);
 
   const racing = room.status === "racing";
 
@@ -87,6 +98,8 @@ export default function RacePage() {
 
   const players = room.order.map((id) => room.players[id]).filter(Boolean);
   const self = room.selfId ? room.players[room.selfId] : undefined;
+  const anyFinished = players.some((p) => p.finished);
+  const allFinished = players.length > 0 && players.every((p) => p.finished);
 
   if (!room.code || room.code !== code) {
     return (
@@ -112,21 +125,55 @@ export default function RacePage() {
         <Countdown startsAt={room.startsAt} />
       )}
 
-      {(room.status === "racing" || room.status === "finished") && (
+      {(room.status === "racing" || room.status === "finished") && !allFinished && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <TypingArea
             passage={passage}
             typed={engine.typed}
             hasMistake={engine.hasMistake}
-            disabled={!racing}
+            disabled={!racing || engine.finished}
           />
           <p className="text-center text-[10px] uppercase tracking-widest text-white/30 font-mono mt-3">
             {engine.finished
-              ? "finished — waiting for others..."
+              ? "finished. keep watching the live ranking below."
               : engine.hasMistake
                 ? "fix the red character (backspace)"
-                : "type the passage — every correct keystroke moves your car"}
+                : "type the passage. every correct keystroke moves your car."}
           </p>
+        </motion.div>
+      )}
+
+      {anyFinished && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <LiveLeaderboard
+            players={players}
+            selfId={room.selfId}
+            title={allFinished ? "Final Standings" : "Live Ranking"}
+          />
+        </motion.div>
+      )}
+
+      {allFinished && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex flex-col sm:flex-row gap-3 justify-center"
+        >
+          <Button onClick={() => router.push(`/lobby/${code}`)} className="flex-1 sm:flex-none sm:min-w-[180px]">
+            Rematch in this room
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/")}
+            className="flex-1 sm:flex-none sm:min-w-[180px]"
+          >
+            Back to home
+          </Button>
         </motion.div>
       )}
     </div>

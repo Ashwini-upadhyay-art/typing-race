@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/Button";
 import { Countdown } from "@/components/Countdown";
+import { LiveLeaderboard } from "@/components/LiveLeaderboard";
 import { RaceTrack } from "@/components/RaceTrack";
 import { TypingArea } from "@/components/TypingArea";
 import { useTypingEngine } from "@/hooks/useTypingEngine";
@@ -214,10 +215,14 @@ export default function SoloPage() {
     setStartsAt(null);
   }
 
-  // Build the players list the RaceTrack expects. While picking we just
-  // show a preview with both cars at the start line.
-  const players: Player[] = useMemo(
-    () => [
+  // Build the players list the RaceTrack and LiveLeaderboard expect.
+  // Position is derived from finishOrderRef so medals reflect actual
+  // finish order, not the natural array order.
+  const players: Player[] = useMemo(() => {
+    const order = finishOrderRef.current;
+    const selfPos = order.indexOf(SELF_ID);
+    const botPos = order.indexOf(BOT_ID);
+    return [
       {
         id: SELF_ID,
         username: username || "You",
@@ -226,19 +231,22 @@ export default function SoloPage() {
         wpm: selfSnap.wpm,
         accuracy: selfSnap.accuracy,
         finished: selfSnap.finished,
+        position: selfSnap.finished && selfPos >= 0 ? selfPos + 1 : undefined,
       },
       {
         id: BOT_ID,
-        username: "Bot",
+        username: `Bot (${activeTarget} wpm)`,
         joinedAt: 1,
         progress: botSnap.progress,
         wpm: activeTarget,
         accuracy: 100,
         finished: botSnap.finished,
+        position: botSnap.finished && botPos >= 0 ? botPos + 1 : undefined,
       },
-    ],
-    [username, selfSnap, botSnap, activeTarget]
-  );
+    ];
+  }, [username, selfSnap, botSnap, activeTarget]);
+
+  const anyFinished = selfSnap.finished || botSnap.finished;
 
   // ---- pick screen ----------------------------------------------------
   if (phase === "pick") {
@@ -338,19 +346,29 @@ export default function SoloPage() {
             passage={passage}
             typed={engine.typed}
             hasMistake={engine.hasMistake}
-            disabled={!racing}
+            disabled={!racing || engine.finished}
           />
           <p className="text-center text-[10px] uppercase tracking-widest text-white/30 font-mono mt-3">
             {phase === "finished"
               ? selfSnap.finished
                 ? "race over"
-                : "race over — bot won"
+                : "race over. bot won."
               : engine.finished
-                ? "finished — waiting for bot to cross..."
+                ? "finished. waiting for bot to cross..."
                 : engine.hasMistake
                   ? "fix the red character (backspace)"
-                  : "type the passage — every correct keystroke moves your car"}
+                  : "type the passage. every correct keystroke moves your car."}
           </p>
+        </motion.div>
+      )}
+
+      {anyFinished && phase !== "finished" && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <LiveLeaderboard players={players} selfId={SELF_ID} />
         </motion.div>
       )}
 
